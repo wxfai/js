@@ -45,11 +45,9 @@ public class macho {
         text.appendSection(sec2);
         text.vmaddr = 0x100000000l;
         text.vmsize = 0x1000;
-        text.filesize = 4096;
+        text.filesize = 1024;
         text.maxprot = 7;
         text.initprot = 5;
-        //sec.
-        //text.toArray();
 
         segment_command_64 data = new segment_command_64("__DATA", LC_SEGMENT_64);
         section_64 data_sec = new section_64("__data","__DATA");
@@ -74,7 +72,27 @@ public class macho {
         m.appendCommand(ld_info);
         m.appendCommand(linker);
         m.appendCommand(lib);
+
+        sec.offset = m.sizeofcmds + 0x20;	// 0x20 is the length of macho header
+        sec.size = 32;
+        sec.addr = 0x0000000100000000l+sec.offset;
+        sec.flags = 0x80000400;
+        sec2.offset = (int) (sec.offset + sec.size);
+        sec2.size = 0x48;
+        sec2.addr = sec.addr + sec.size;
+        sec2.align = 2;
         
+        main_entry.entryoff = sec.offset;
+        		
+        data.vmaddr = 0x0000000100001000l;
+        data.vmsize = 0x1000;
+        data.maxprot = 7;
+        data.initprot = 3;
+        
+        data_sec.addr = 0x0000000100001000l;
+//        data_sec.size = 0x0f;
+//        data_sec.offset = 4096;
+
         pagezero.cmdsize = 72;
         m.writeFile(outputFile);
     }
@@ -136,7 +154,7 @@ public class macho {
                 buf.order(ByteOrder.LITTLE_ENDIAN);
 	        	for(Field f:fields) {
 	        		Class<?> type = f.getType();
-//	        		System.out.println(f.toString());
+//	        		pln(f.toString());
 	        		if(type == int.class) {
 	                    buf.putInt(f.getInt(this));         			
 	        		}
@@ -149,7 +167,6 @@ public class macho {
 	        			int len = (s.length() > name.length)?name.length:s.length();
 	        			System.arraycopy(s.getBytes(), 0, name, 0, len);
 	                    buf.put(name); 
-//	                    buf.position(24);
 	        		}
 	        		else if(type == byte[].class) {
 	                    buf.put((byte[])f.get(this));
@@ -199,7 +216,8 @@ public class macho {
                 byte[] machoHeader = toArray();
                  
                 byte[] code = makeCode();
-                byte[] dataSeg = "Hello, World!\n".getBytes();
+                byte[] dataSeg = new byte[4096];
+                System.arraycopy("Hello, World!\n".getBytes(), 0, dataSeg, 0, 14);
 
                 fos.write(machoHeader);
                 for(base cmd:cmds) {
@@ -272,10 +290,10 @@ public class macho {
 	}
 	
 	static class section_64 extends base{ /* for 64-bit architectures */
-		String		sectname;	/* name of this section, byte[16] */
-		String		segname;	/* segment this section goes in, byte[16] */
-		long	addr;		/* memory address of this section */
-		long	size;		/* size in bytes of this section */
+		String sectname;	/* name of this section, byte[16] */
+		String segname;	/* segment this section goes in, byte[16] */
+		long addr;		/* memory address of this section */
+		long size;		/* size in bytes of this section */
 		int	offset;		/* file offset of this section */
 		int	align;		/* section alignment (power of 2) */
 		int	reloff;		/* file offset of relocation entries */
