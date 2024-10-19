@@ -29,11 +29,21 @@ public class macho {
 	static int LC_DYLD_INFO			= 0x22;
 	static int LC_DYLD_INFO_ONLY	= LC_DYLD_INFO | LC_REQ_DYLD;
 	static int LC_MAIN 				= 0x80000028;
+	//
+    String outputFile 				= null;
 
     public static void main(String[] args) {
         String outputFile = "out/hello";
-        
-        macho_header64 m = new macho_header64();
+    	macho m = new macho(outputFile);
+    	m.writeFile();
+    }
+
+    public macho(String outputFile){
+    	this.outputFile = outputFile;
+    }
+    
+    public void writeFile(){        
+        macho_header64 header = new macho_header64();
         
         segment_command_64 pagezero = new segment_command_64("__PAGEZERO", LC_SEGMENT_64);
         pagezero.vmsize =  0x100000000l;
@@ -62,18 +72,18 @@ public class macho {
         dylinker_command linker = new dylinker_command("/usr/lib/dyld");
         dylib_command lib = new dylib_command("/usr/lib/libSystem.B.dylib");
 
-        m.appendCommand(pagezero);
-        m.appendCommand(text);
-        m.appendCommand(data);
-        m.appendCommand(linkedit);
-        m.appendCommand(symtab);
-        m.appendCommand(dysymtab);
-        m.appendCommand(main_entry);
-        m.appendCommand(ld_info);
-        m.appendCommand(linker);
-        m.appendCommand(lib);
+        appendCommand(pagezero);
+        appendCommand(text);
+        appendCommand(data);
+        appendCommand(linkedit);
+        appendCommand(symtab);
+        appendCommand(dysymtab);
+        appendCommand(main_entry);
+        appendCommand(ld_info);
+        appendCommand(linker);
+        appendCommand(lib);
 
-        sec.offset = m.sizeofcmds + 0x20;	// 0x20 is the length of macho header
+        sec.offset = sizeofcmds + 0x20;	// 0x20 is the length of macho header
         sec.size = 32;
         sec.addr = 0x0000000100000000l+sec.offset;
         sec.flags = 0x80000400;
@@ -94,13 +104,42 @@ public class macho {
 //        data_sec.offset = 4096;
 
         pagezero.cmdsize = 72;
-        m.writeFile(outputFile);
+//        writeFile(outputFile);
+        
+        header.ncmds = cmds.size();
+        header.sizeofcmds = sizeofcmds;
+        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+            byte[] machoHeader = header.toArray();             
+            byte[] code = makeCode();
+            byte[] dataSeg = new byte[4096];
+            System.arraycopy("Hello, World!\n".getBytes(), 0, dataSeg, 0, 14);
+
+            fos.write(machoHeader);
+            for(base cmd:cmds) {
+                byte[] bytes = cmd.toArray();
+                fos.write(bytes); 
+                pln("Write " + bytes.length +" bytes, " + cmd);
+            }
+
+            fos.write(code);
+            fos.write(dataSeg);            // 写入字符串 "Hello, World!\n" 到数据段
+
+            System.out.println("Mach-O file with 'Hello, World!' created at " + outputFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
     static void pln(String log) {
     	System.out.println(log);
     }
     
-    private static byte[] makeCode() {
+    byte[] syscall = {0x0f, 0x05};
+    byte[] mov_rax_200001 = {0x48, (byte)0xc7, (byte)0xc0, 0x01, 0x00, 0x00, 0x02};
+    byte[] xor_rdi_rdi = {0x48, 0x31, (byte)0xff};
+    byte[] mov_ebx_0 = {(byte)0xbb, 0x00, 0x00, 0x00, 0x00};		// movl	$0, %ebx
+    byte[] mov_eax_200001 = {(byte)0xb8, 0x01, 0x00, 0x00, 0x02}; 	// movl	$0x2000001, %eax         ## imm = 0x2000001
+    private byte[] makeCode() {
         int fileSize = 1024;
         // 写入代码段，执行系统调用，输出 "Hello, World!"
         ByteBuffer codeSection = ByteBuffer.allocate((int) fileSize);
@@ -120,20 +159,14 @@ public class macho {
 //        // mov rdx, 13 (message length)
 //        codeSection.put((byte) 0xba); codeSection.putInt(13);
 //
-//        // syscall
-        byte[] syscall = {0x0f, 0x05};
         //codeSection.put(syscall);
 
         // mov rax, 0x2000001 (exit syscall)
-        codeSection.put((byte) 0x48); codeSection.put((byte) 0xc7);
-        codeSection.put((byte) 0xc0); codeSection.putInt(0x2000001);
+		codeSection.put(mov_rax_200001);
 
         // xor rdi, rdi (exit code 0)
-        byte[] xor_rdi_rdi = {0x48, 0x31, (byte)0xff};
 		codeSection.put(xor_rdi_rdi);
 		
-        byte[] mov_ebx_0 = {(byte)0xbb, 0x00, 0x00, 0x00, 0x00};		// movl	$0, %ebx
-        byte[] mov_eax_200001 = {(byte)0xb8, 0x01, 0x00, 0x00, 0x02}; 	// movl	$0x2000001, %eax         ## imm = 0x2000001
         codeSection.put(mov_ebx_0);
         codeSection.put(mov_eax_200001);
         // syscall
@@ -141,6 +174,12 @@ public class macho {
         byte[] code = codeSection.array();
 		return code;
 	}
+	List<base> cmds = new ArrayList<base>();
+	int sizeofcmds = 0;
+	public void appendCommand(base cmd) {
+    	cmds.add(cmd);
+    	sizeofcmds += cmd.toArray().length; // cmd.cmdsize();	// add size of section
+    }
 
 	
 	static class base{
@@ -201,39 +240,9 @@ public class macho {
         int sizeofcmds	= 0; //56+16 + 24; 				// 56 bytes for LC_SEGMENT_64, 24 bytes for LC_MAIN
         int flags		= MH_NOUNDEFS;
     	int reserved	= 0;
-    	List<base> cmds = new ArrayList<base>();
     	
-    	macho_header64(){
-    		
+    	macho_header64(){    		
     	}
-		public void appendCommand(base cmd) {
-        	cmds.add(cmd);
-        	ncmds ++;
-        	sizeofcmds += cmd.toArray().length; // cmd.cmdsize();	// add size of section
-        }
-        public void writeFile(String outputFile) {
-            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-                byte[] machoHeader = toArray();
-                 
-                byte[] code = makeCode();
-                byte[] dataSeg = new byte[4096];
-                System.arraycopy("Hello, World!\n".getBytes(), 0, dataSeg, 0, 14);
-
-                fos.write(machoHeader);
-                for(base cmd:cmds) {
-                    byte[] bytes = cmd.toArray();
-                    fos.write(bytes); 
-                    pln("Write " + bytes.length +" bytes, " + cmd);
-                }
-
-                fos.write(code);
-                fos.write(dataSeg);            // 写入字符串 "Hello, World!\n" 到数据段
-
-                System.out.println("Mach-O file with 'Hello, World!' created at " + outputFile);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-		}   	
     }
 	
 	static class segment_command_64 extends base{ /* for 64-bit architectures */
