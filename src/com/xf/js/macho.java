@@ -55,7 +55,7 @@ public class macho {
         text.appendSection(sec2);
         text.vmaddr = 0x100000000l;
         text.vmsize = 0x1000;
-        text.filesize = 1024;
+        text.filesize = 4096;
         text.maxprot = 7;
         text.initprot = 5;
 
@@ -102,16 +102,16 @@ public class macho {
         data.vmsize = 0x1000;
         data.maxprot = 7;
         data.initprot = 3;
-//        data.fileoff = sec.offset + code.length;
-//        data.filesize = text.filesize;
+        data.fileoff = 4096;//sec.offset + code.length;
+        data.filesize = text.filesize;
         
         data_sec.addr = 0x0000000100001000l;
-        data_sec.size =  0;//0x100;
-        data_sec.offset = 0;//sec.offset + code.length;
+        data_sec.size =  0x100;
+        data_sec.offset = 4096; //sec.offset + code.length;
         
         header.ncmds = cmds.size();
         header.sizeofcmds = sizeofcmds;
-        text.filesize = 1024;//+4096;
+//        text.filesize = 1024;//+4096;
         
         // write to file
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
@@ -140,7 +140,7 @@ public class macho {
     byte[] syscall		 			= {0x0f, 0x05};
     byte[] mov_rax_200001 			= {0x48, (byte)0xc7, (byte)0xc0, 0x01, 0x00, 0x00, 0x02};
     byte[] mov_rax_200004 			= {0x48, (byte)0xc7, (byte)0xc0, 0x04, 0x00, 0x00, 0x02};
-    byte[] mov_rdx_13 			= {(byte)0xba, 0x0d, 0x00, 0x00, 0x00};
+    byte[] mov_rdx_14 			= {(byte)0xba, 0x0e, 0x00, 0x00, 0x00};
     byte[] mov_rdi_000001			= {(byte)0xbf, 0x01, 0x00, 0x00, 0x00};
     byte[] xor_rdi_rdi 				= {0x48, 0x31, (byte)0xff};
     byte[] mov_ebx_0 				= {(byte)0xbb, 0x00, 0x00, 0x00, 0x00};
@@ -151,18 +151,18 @@ public class macho {
     byte[] nop					 	= {(byte)0x90};
     byte[] hello					= {'H','e','l','l','o',' ','w','o','r','l','d','!','\n'};
     private byte[] makeCode() {
-        int fileSize = 1024;
+        int fileSize = 4906-834-0x320;
         // 写入代码段，执行系统调用，输出 "Hello, World!"
         ByteBuffer codeSection = ByteBuffer.allocate((int) fileSize);
         codeSection.order(ByteOrder.LITTLE_ENDIAN);
         
         codeSection.put(mov_rax_200004);		// (write syscall)
         codeSection.put(mov_rdi_000001);		// mov rdi, 1 (stdout)
-        codeSection.put(lea_rsi_rip_offset32);	// lea rsi, [rip+msg] (load address of "Hello, World!" message)
-        codeSection.putInt(25);
-//        codeSection.put(mov_rsi_int64);
-//        codeSection.putLong(0x0000000100001000l);
-        codeSection.put(mov_rdx_13);			// mov rdx, 13 (message length)
+//        codeSection.put(lea_rsi_rip_offset32);	// lea rsi, [rip+msg] (load address of "Hello, World!" message)
+//        codeSection.putInt(25);
+        codeSection.put(mov_rsi_int64);
+        codeSection.putLong(0x0000000100001000l);
+        codeSection.put(mov_rdx_14);			// mov rdx, 13 (message length)
         codeSection.put(syscall);
 
 		codeSection.put(mov_rax_200001);		// mov rax, 0x2000001 (exit syscall)
