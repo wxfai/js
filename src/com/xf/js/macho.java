@@ -117,16 +117,18 @@ public class macho {
         // write to file
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             byte[] machoHeader = header.toArray();             
-
             fos.write(machoHeader);
+            int pos = machoHeader.length;
             for(base cmd:cmds) {
                 byte[] bytes = cmd.toArray();
+                pos += bytes.length;
                 fos.write(bytes); 
                 pln("Write " + bytes.length +" bytes, " + cmd);
             }
 
             fos.write(code);
-            byte[] blank = new byte[4096 - code.length % 4096];
+            pos += code.length;
+            byte[] blank = new byte[4096 - pos % 4096];
             fos.write(blank);
             fos.write(dataSeg);            // 写入字符串 "Hello, World!\n" 到数据段
 
@@ -139,77 +141,29 @@ public class macho {
     static void pln(String log) {
     	System.out.println(log);
     }
-    static int SYSCALL_EXIT			= 0x2000001;
-    static int SYSCALL_WRITE		= 0x2000004;
-    byte[] syscall		 			= {0x0f, 0x05};
-    byte[] mov_rax_int32 			= {0x48, (byte)0xc7, (byte)0xc0}; //, 0x01, 0x00, 0x00, 0x02
-    byte[] mov_rax_200001 			= {0x48, (byte)0xc7, (byte)0xc0, 0x01, 0x00, 0x00, 0x02};
-    byte[] mov_rax_200004 			= {0x48, (byte)0xc7, (byte)0xc0, 0x04, 0x00, 0x00, 0x02};
-    byte[] mov_rdx_int32			= {(byte)0xba}; //, 0x0e, 0x00, 0x00, 0x00
-    byte[] mov_rdi_000001			= {(byte)0xbf, 0x01, 0x00, 0x00, 0x00};
-    byte[] xor_rdi_rdi 				= {0x48, 0x31, (byte)0xff};
-    byte[] mov_ebx_0 				= {(byte)0xbb, 0x00, 0x00, 0x00, 0x00};
-    byte[] mov_eax_200001 			= {(byte)0xb8, 0x01, 0x00, 0x00, 0x02};    
-    byte[] lea_rsi_rip_offset32 	= {0x48, (byte)0x8d, 0x35};
-    byte[] mov_rsi_int64			= {0x48, (byte)0xBE}; // 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-//  byte[] mov_rsi_int64			= {0x48, (byte)0xBE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    byte[] nop					 	= {(byte)0x90};
-    byte[] hello					= {'H','e','l','l','o',',', ' ','w','o','r','l','d','!','\n'};
+
+    // 写入代码段，执行系统调用，输出 "Hello, World!"
     private byte[] makeCode() {
-        int fileSize = 4906-834-0x320;
-        // 写入代码段，执行系统调用，输出 "Hello, World!"
+        String hello = "Hello, Code!\n";
         Asm asm = new Asm();
-        asm.mov_rdx(14);			// mov rdx, 14 (message length)
-        asm.mov_rdi(1);				// mov rdi, 1 (stdout)
-        asm.mov_rsi(0x0000000100001000l);
-        asm.syscall(SYSCALL_WRITE);
+        asm.mov_rdx(14);				// mov rdx, 14 (message length)
+        asm.mov_rdi(1);					// mov rdi, 1 (stdout)
+        asm.mov_rsi(0x0100001000l);		// data section vmaddr
+        asm.syscall(Asm.SYSCALL_WRITE);
 	    
-        asm.mov_rdx(14);			// mov rdx, 14 (message length)
-        asm.mov_rdi(1);				// mov rdi, 1 (stdout)
-        asm.lea_rsi_rip_offset32(28);	// lea rsi, [rip+msg] (load address of "Hello, World!" message)
-        asm.syscall(SYSCALL_WRITE);
-	    asm.nop();
+        asm.mov_rdx(hello.length());	// mov rdx, 14 (message length)
+        asm.mov_rdi(1);					// mov rdi, 1 (stdout)
+        asm.lea_rsi_rip_offset32(27);	// lea rsi, [rip+msg] (load address of "Hello, World!" message)
+        asm.syscall(Asm.SYSCALL_WRITE);
 
-		asm.xor_rdi_rdi();			// xor rdi, rdi (exit code 0)		
+		asm.xor_rdi_rdi();				// xor rdi, rdi (exit code 0)		
         asm.mov_ebx(0);
-        asm.syscall(SYSCALL_EXIT);
+        asm.syscall(Asm.SYSCALL_EXIT);
         
-        asm.put(nop);
+        asm.nop();
         asm.put(hello);
-        byte[] dat = asm.toBytes();
-        if(1>0)return dat;
-        
-        ByteBuffer codeSection = ByteBuffer.allocate((int) fileSize);
-        codeSection.order(ByteOrder.LITTLE_ENDIAN);
-        
-        codeSection.put(mov_rax_int32);			// mov rax, 0x2000004 (write syscall)
-        codeSection.putInt(SYSCALL_WRITE);
-        codeSection.put(mov_rdx_int32);			// mov rdx, 14 (message length)
-        codeSection.putInt(14);
-        codeSection.put(mov_rdi_000001);		// mov rdi, 1 (stdout)
-        codeSection.put(mov_rsi_int64);
-        codeSection.putLong(0x0000000100001000l);
-        codeSection.put(syscall);
-	    
-        codeSection.put(mov_rax_int32);			// (write syscall)
-        codeSection.putInt(SYSCALL_WRITE);
-        codeSection.put(mov_rdx_int32);			// mov rdx, 14 (message length)
-        codeSection.putInt(14);
-        codeSection.put(mov_rdi_000001);		// mov rdi, 1 (stdout)
-        codeSection.put(lea_rsi_rip_offset32);	// lea rsi, [rip+msg] (load address of "Hello, World!" message)
-	    codeSection.putInt(20);
-        codeSection.put(syscall);
-
-        codeSection.put(mov_rax_int32);			// mov rax, 0x2000001 (exit syscall)
-        codeSection.putInt(SYSCALL_EXIT);
-		codeSection.put(xor_rdi_rdi);			// xor rdi, rdi (exit code 0)		
-        codeSection.put(mov_ebx_0);
-        codeSection.put(syscall);
-        
-        codeSection.put(nop);
-        codeSection.put(hello);
-        byte[] code = codeSection.array();
-		return code;
+        byte[] code = asm.toBytes();
+        return code;
 	}
     private void putInt(ByteBuffer bb, byte[] code, int v) {
         bb.put(code);
@@ -245,7 +199,7 @@ public class macho {
         public Asm() {
         	this(ByteOrder.LITTLE_ENDIAN);
         }
-        public Asm(ByteOrder byteorder) {
+		public Asm(ByteOrder byteorder) {
             baos = new ByteArrayOutputStream();
             dos = new java.io.DataOutputStream(baos);
         	byteOrder = byteorder;
@@ -360,6 +314,9 @@ public class macho {
         public void nop() {
         	put(nop);
         }
+        public void put(String s) {
+        	put(s.getBytes());
+		}
 	}
 	
 	static class base{
