@@ -1,9 +1,7 @@
 package com.xf.js;
-import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -53,7 +51,7 @@ public class macho {
         section_64 sec = new section_64("__text","__TEXT");
         section_64 sec2 = new section_64("__unwind_info","__TEXT");
         text.appendSection(sec);
-        text.appendSection(sec2);
+//        text.appendSection(sec2);
         text.vmaddr = 0x100000000l;
         text.vmsize = 0x1000;
         text.filesize = 4096;
@@ -76,35 +74,35 @@ public class macho {
         appendCommand(pagezero);
         appendCommand(text);
         appendCommand(data);
-        appendCommand(linkedit);
+        appendCommand(linkedit);	// not necessary
         appendCommand(symtab);
         appendCommand(dysymtab);
         appendCommand(main_entry);
-        appendCommand(ld_info);
+        appendCommand(ld_info);	// not necessary
         appendCommand(linker);
-        appendCommand(lib);
+        appendCommand(lib);		// not necessary
 
         byte[] code = makeCode();
         byte[] dataSeg = new byte[4096];
         System.arraycopy("Hello, World!\n".getBytes(), 0, dataSeg, 0, 14);
 
         sec.offset = sizeofcmds + 0x20;	// 0x20 is the length of macho header
-        sec.size = 128;
-        sec.addr = 0x0000000100000000l+sec.offset;
+        sec.size = code.length;
+        sec.addr = 0x0100000000l + sec.offset;
         sec.flags = 0x80000400;
         sec2.offset = (int) (sec.offset + sec.size);
-        sec2.size = 0x48;
+        sec2.size = 10;
         sec2.addr = sec.addr + sec.size;
         sec2.align = 2;
         
         main_entry.entryoff = sec.offset;
         		
         data.vmaddr = 0x0000000100001000l;
-        data.vmsize = 0x1000;
+        data.vmsize = dataSeg.length;
         data.maxprot = 7;
         data.initprot = 3;
-        data.fileoff = 4096;//sec.offset + code.length;
-        data.filesize = text.filesize;
+        data.fileoff = 4096;	//sec.offset + code.length;
+        data.filesize = dataSeg.length;
         
         data_sec.addr = 0x0000000100001000l;
         data_sec.size =  0x100;
@@ -116,14 +114,15 @@ public class macho {
         
         // write to file
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            byte[] machoHeader = header.toArray();             
+            byte[] machoHeader = header.toArray(); 
             fos.write(machoHeader);
             int pos = machoHeader.length;
-            for(base cmd:cmds) {
+            for(int i=0;i<cmds.size();i++) {
+            	base cmd = cmds.get(i);
                 byte[] bytes = cmd.toArray();
                 pos += bytes.length;
                 fos.write(bytes); 
-                pln("Write " + bytes.length +" bytes, " + cmd);
+                pln("Write comand " + i +", size=" + bytes.length +" bytes, " + cmd);
             }
 
             fos.write(code);
@@ -146,19 +145,16 @@ public class macho {
     private byte[] makeCode() {
         String hello = "Hello, Code!\n";
         Asm asm = new Asm();
-        asm.mov_rdx(14);				// mov rdx, 14 (message length)
-        asm.mov_rdi(1);					// mov rdi, 1 (stdout)
-        asm.mov_rsi(0x0100001000l);		// data section vmaddr
-        asm.syscall(Asm.SYSCALL_WRITE);
+
+        asm.syscall(Asm.SYSCALL_WRITE, Asm.STDOUT, 0x0100001000l, 14);
 	    
-        asm.mov_rdx(hello.length());	// mov rdx, 14 (message length)
-        asm.mov_rdi(1);					// mov rdi, 1 (stdout)
-        asm.lea_rsi_rip_offset32(27);	// lea rsi, [rip+msg] (load address of "Hello, World!" message)
+        asm.mov_rdi(Asm.STDOUT);			// mov rdi, 1 (stdout)
+        asm.mov_rdx(hello.length());		// mov rdx, 14 (message length)
+        asm.lea_rsi_rip_offset32(24);		// lea rsi, [rip+msg] (load address of "Hello, World!" message)
+        									// 24= 0x37e - 0x35f - 7
         asm.syscall(Asm.SYSCALL_WRITE);
 
-		asm.xor_rdi_rdi();				// xor rdi, rdi (exit code 0)		
-        asm.mov_ebx(0);
-        asm.syscall(Asm.SYSCALL_EXIT);
+        asm.syscall(Asm.SYSCALL_EXIT, 0);	// echo $?
         
         asm.nop();
         asm.put(hello);
@@ -176,148 +172,7 @@ public class macho {
     	sizeofcmds += cmd.toArray().length; // cmd.cmdsize();	// add size of section
     }
 
-	static class Asm{
-//        ByteBuffer buffer ;
-        ByteOrder byteOrder;
-        ByteArrayOutputStream baos;
-        java.io.DataOutputStream dos;
 
-        static int SYSCALL_EXIT			= 0x2000001;
-        static int SYSCALL_WRITE		= 0x2000004;
-        byte[] syscall		 			= {0x0f, 0x05};
-        byte[] mov_rax_int32 			= {0x48, (byte)0xc7, (byte)0xc0}; //, 0x01, 0x00, 0x00, 0x02
-        byte[] mov_rdx_int32			= {(byte)0xba}; //, 0x0e, 0x00, 0x00, 0x00
-        byte[] mov_rdi_int32			= {(byte)0xbf}; //, 0x01, 0x00, 0x00, 0x00};
-        byte[] xor_rdi_rdi 				= {0x48, 0x31, (byte)0xff};
-        byte[] mov_ebx_int32 			= {(byte)0xbb};//, 0x00, 0x00, 0x00, 0x00};
-        byte[] mov_eax_int32 			= {(byte)0xb8};//, 0x01, 0x00, 0x00, 0x02};    
-        byte[] lea_rsi_rip_offset32 	= {0x48, (byte)0x8d, 0x35};
-        byte[] mov_rsi_int64			= {0x48, (byte)0xBE}; // 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    //  byte[] mov_rsi_int64			= {0x48, (byte)0xBE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        byte[] nop					 	= {(byte)0x90};
-        
-        public Asm() {
-        	this(ByteOrder.LITTLE_ENDIAN);
-        }
-		public Asm(ByteOrder byteorder) {
-            baos = new ByteArrayOutputStream();
-            dos = new java.io.DataOutputStream(baos);
-        	byteOrder = byteorder;
-//        	ensureCapacity(4096);
-        }
-//        public void ensureCapacity(int additionalCapacity) {
-//            if (buffer.remaining() < additionalCapacity) {
-//                int newCapacity = Math.max(buffer.capacity() * 2, buffer.capacity() + additionalCapacity);
-//                ByteBuffer newBuffer = ByteBuffer.allocate(newCapacity);
-//                newBuffer.order(byteOrder);
-//                buffer.flip();
-//                newBuffer.put(buffer);
-//                buffer = newBuffer;
-//            }
-//        }
-        public void put(byte[] code) {
-        	try {
-				dos.write(code);
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-//        	ensureCapacity
-//        		buffer.put(code);
-        }
-        public void put(byte code) {
-        	try {
-				dos.write(code);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-        }
-        public void put(short i16) {
-        	try {
-				dos.writeShort(i16(i16));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-        }
-        public void put(int i32) {
-        	try {
-				dos.writeInt(i32(i32));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-        }
-        public void put(long i64) {
-        	try {
-				dos.writeLong(i64(i64));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-        }
-        public short i16(int v) {
-        	return (short)i32(v);
-        }
-        public int i32(int v) {
-        	if(byteOrder == ByteOrder.LITTLE_ENDIAN) {
-        		v = Integer.reverseBytes(v);
-        	}
-        	return v;
-        }
-        public long i64(long v) {
-        	if(byteOrder == ByteOrder.LITTLE_ENDIAN) {
-        		v = Long.reverseBytes(v);
-        	}
-        	return v;
-        }
-        public byte[] toBytes() {
-        	byte[] code = baos.toByteArray();
-        	return code;
-        }
-
-        public void syscall() {
-        	put(syscall);
-        }
-        public void syscall(int func) {
-        	mov_rax(func);
-        	syscall();
-        }
-        public void mov_rax(int i32) {
-        	put(mov_rax_int32);
-        	put(i32);
-        }
-        public void mov_rdx(int i32) {
-        	put(mov_rdx_int32);
-        	put(i32);
-        }
-        public void mov_rdi(int i32) {
-        	put(mov_rdi_int32);
-        	put(i32);
-        }
-        public void xor_rdi_rdi() {
-        	put(xor_rdi_rdi);
-        }
-        public void mov_ebx(int i32) {
-        	put(mov_ebx_int32);
-        	put(i32);
-        }
-        public void mov_eax(int i32) {
-        	put(mov_eax_int32);
-        	put(i32);
-        }
-        public void lea_rsi_rip_offset32(int i32) {
-        	put(lea_rsi_rip_offset32);
-        	put(i32);
-        }
-        public void mov_rsi(long i64) {
-        	put(mov_rsi_int64);
-        	put(i64);
-        }
-        public void nop() {
-        	put(nop);
-        }
-        public void put(String s) {
-        	put(s.getBytes());
-		}
-	}
 	
 	static class base{
         byte[] toArray() {
