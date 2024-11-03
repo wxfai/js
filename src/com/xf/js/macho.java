@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class macho {
+	//defined in /Library/Developer/CommandLineTools/SDKs/MacOSX14.sdk/usr/include/mach-o/loader.h
 	static int MH_MAGIC_64			= 0xfeedfacf; /* the 64-bit mach magic number */
 	static int MH_EXECUTE			= 0x2;		/* demand paged executable file */
 
@@ -41,6 +42,7 @@ public class macho {
     	this.outputFile = outputFile;
     }
     
+    String helloWorld = "Hello, World!\n";
     public void writeFile(){        
         macho_header64 header = new macho_header64();
         
@@ -51,10 +53,10 @@ public class macho {
         section_64 sec = new section_64("__text","__TEXT");
         section_64 sec2 = new section_64("__unwind_info","__TEXT");
         text.appendSection(sec);
-//        text.appendSection(sec2);
+        text.appendSection(sec2);
         text.vmaddr = 0x100000000l;
-        text.vmsize = 0x1000;
-        text.filesize = 4096;
+//        text.vmsize = 0x1000;
+//        text.filesize = 4096;
         text.maxprot = 7;
         text.initprot = 5;
 
@@ -84,9 +86,14 @@ public class macho {
 
         byte[] code = makeCode();
         byte[] dataSeg = new byte[4096];
-        System.arraycopy("Hello, World!\n".getBytes(), 0, dataSeg, 0, 14);
+        System.arraycopy(helloWorld.getBytes(), 0, dataSeg, 0, helloWorld.length());
 
-        sec.offset = sizeofcmds + 0x20;	// 0x20 is the length of macho header
+        int headerSize = 0x20;        // 0x20 is the length of macho header
+        headerSize += sizeofcmds;	
+
+        text.vmsize = code.length;
+        text.filesize = code.length;
+        sec.offset = headerSize;
         sec.size = code.length;
         sec.addr = 0x0100000000l + sec.offset;
         sec.flags = 0x80000400;
@@ -143,18 +150,18 @@ public class macho {
 
     // 写入代码段，执行系统调用，输出 "Hello, World!"
     private byte[] makeCode() {
-        String hello = "Hello, Code!\n";
-        Asm asm = new Asm();
-
-        asm.syscall(Asm.SYSCALL_WRITE, Asm.STDOUT, 0x0100001000l, 14);
+    	Asm asm = new Asm();
+    	
+        asm.syscall(Asm.SYSCALL_WRITE, Asm.STDOUT, 0x0100001000l, helloWorld.length());
 	    
+        String hello = "Hello, Code!\n";
         asm.mov_rdi(Asm.STDOUT);			// mov rdi, 1 (stdout)
         asm.mov_rdx(hello.length());		// mov rdx, 14 (message length)
         asm.lea_rsi_rip_offset32(24);		// lea rsi, [rip+msg] (load address of "Hello, World!" message)
         									// 24= 0x37e - 0x35f - 7
         asm.syscall(Asm.SYSCALL_WRITE);
 
-        asm.syscall(Asm.SYSCALL_EXIT, 0);	// echo $?
+        asm.syscall(Asm.SYSCALL_EXIT, 0);	// print return code in shell: echo $?
         
         asm.nop();
         asm.put(hello);
@@ -384,7 +391,7 @@ public class macho {
 		int	cmd;			/* LC_ID_DYLIB, LC_LOAD_{,WEAK_}DYLIB,
 						   		LC_REEXPORT_DYLIB */
 		int	cmdsize;		/* includes pathname string */
-//		dylib dylib;		/* the library identification */
+//		struct dylib dylib;		/* the library identification */
 		int name_offset;			/* lc_str library's path name, 8bytes align */
 	    int timestamp;				/* library's build time stamp */
 	    int current_version;		/* library's current version number */
