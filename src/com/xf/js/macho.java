@@ -16,6 +16,11 @@ public class macho {
     static int CPU_TYPE_X86_64		= 0x01000007;
     static int CPU_SUBTYPE_X86_64_ALL	= 0x00000003;
 //
+    static int CPU_TYPE_ARM64		= 0x0100000c;
+    static int CPU_SUBTYPE_ARM64_ALL= 0;
+    static int CPU_SUBTYPE_ARM64_V8	= 1;
+    static int CPU_SUBTYPE_ARM64E   = 2;
+//
 	static int VM_PROT_READ			= 1;
 	static int VM_PROT_WRITE		= 2;
 	static int VM_PROT_EXECUTE		= 4;
@@ -44,7 +49,7 @@ public class macho {
     
     String helloWorld = "Hello, World!\n";
     public void writeFile(){        
-        macho_header64 header = new macho_header64();
+        mach_header64 header = new mach_header64();
         
         segment_command_64 pagezero = new segment_command_64("__PAGEZERO", LC_SEGMENT_64);
         pagezero.vmsize =  0x100000000l;
@@ -230,7 +235,7 @@ public class macho {
         }
 	}
 	
-	static class macho_header64 extends base {
+	static class mach_header64 extends base {
 		int magic		= MH_MAGIC_64;       		// Magic number for 64-bit Mach-O (0xfeedfacf)
     	int cputype		= CPU_TYPE_X86_64;	    	// CPU type (CPU_TYPE_X86_64 = 0x01000007)
         int cpusubtype	= CPU_SUBTYPE_X86_64_ALL;	// CPU subtype (CPU_SUBTYPE_X86_64_ALL = 0x00000003)
@@ -240,7 +245,7 @@ public class macho {
         int flags		= MH_NOUNDEFS;
     	int reserved	= 0;
     	
-    	macho_header64(){    		
+    	mach_header64(){    		
     	}
     }
 	
