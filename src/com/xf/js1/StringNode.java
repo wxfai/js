@@ -1,15 +1,15 @@
-package com.xf.js2;
+package com.xf.js1;
 import java.util.Map;
 
-class NumberNode extends ASTNode {
+class StringNode extends ASTNode {
     String value;
 
-    public NumberNode(String value) {
+    public StringNode(String value) {
         this.value = value;
     }
 
     @Override
     public Object evaluate(Map<String, Object> context) {
-        return Integer.parseInt(value);
+        return value;
     }
 }

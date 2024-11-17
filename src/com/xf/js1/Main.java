@@ -4,48 +4,32 @@ import java.util.List;
 import java.util.Map;
 
 public class Main {
-    public static void main2(String[] args) {
-        String code = "let x=5; let y = 10; let z = x + y; print(x); if(y>x){print(z);}";
-        code = "let x = 10 < 20; let y = 30 > 15; print(x); print(y);";
-        code = "let x = 10 ; let y = 30 ; print(x); print(y);";
-
-        Lexer lexer = new Lexer(code);
-        List<Token> tokens = lexer.tokenize();
-        tokens.forEach(System.out::println);
-
-        Parser parser = new Parser(tokens);
-        ASTNode ast = parser.parse();
-        
-        // 创建执行上下文 (保存变量的哈希表)
-        Map<String, Object> context = new HashMap<>();
-
-        // 执行 AST
-        ast.evaluate(context);
-        System.out.println("AST generated: " + ast);
-    }
     public static void main(String[] args) {
-        // 示例代码
-        String code = "let x = 10 + 20; let y = x > 15; print(x); print(y);";
-        code = "let x = 10 < 20; let y = 30 > 15; print(x); print(y);";
-        code = "let x = 10 ; let y = 30 ; print(x); print(y);";
+        String code = 
+        		  "let x = 5; let h=\"hello\";"
+        		+ "let y = 10;"
+        		+ "let z = 0;let z=x + y;"
+        		+ "print(h);"
+        		+ "print(\"x=\",x);"
+        		+ "if(y>x){print(\"z=\",z);}";
+        code += "for (let i = 0; i < 5; i = i + 1;) {print(i); }";
+        code += "let i = 0; i = i + 1;print(i);i = i + 1;print(i);";
 
-        // 词法分析
         Lexer lexer = new Lexer(code);
         List<Token> tokens = lexer.tokenize();
-        tokens.forEach(System.out::println);
+        tokens.forEach(Main::plog);
+        plog("=========");
 
-        // 语法解析
-        Parser parser = new Parser(tokens);
-        ASTNode ast = parser.parse();
-
-        // 创建执行上下文 (保存变量的哈希表)
         Map<String, Object> context = new HashMap<>();
 
-        // 执行 AST
+        ASTNode ast = Parser.parse(tokens);
         ast.evaluate(context);
-
-        // 输出上下文变量的内容
+        
+        System.out.println("AST generated: " + ast);
         System.out.println("Execution context: " + context);
+    }
+    public static void plog(Object log) {
+    	System.out.println(log);
     }
 }
 

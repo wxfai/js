@@ -2,11 +2,8 @@ package com.xf.js;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Map;
 
 public class js {
-    // 存储变量
     private Map<String, Object> variables = new HashMap<>();
 
     public static void main(String[] args) {
@@ -17,7 +14,6 @@ public class js {
         engine.interpret(code); // 输出: 5 15
     }
 
-    // 解释并执行代码
     private void interpret(String code) {
         int length = code.length();
         StringBuilder currentStatement = new StringBuilder();

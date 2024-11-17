@@ -1,17 +1,22 @@
 package com.xf.js1;
+import java.util.List;
 import java.util.Map;
 
 class PrintNode extends ASTNode {
-	ASTNode expression;
+    List<ASTNode> expressions;
 
-	public PrintNode(ASTNode expression) {
-	    this.expression = expression;
-	}
-	 
-	@Override
-	public Object evaluate(Map<String, Object> context) {
-	    Object value = expression.evaluate(context);
-	    System.out.println(value);
-	    return value;
-	}
+    public PrintNode(List<ASTNode> expressions) {
+        this.expressions = expressions;
+    }
+
+    @Override
+    public Object evaluate(Map<String, Object> context) {
+        for (ASTNode expression : expressions) {
+            Object value = expression.evaluate(context);
+            System.out.print(value);
+            System.out.print(" ");
+        }
+        System.out.println();
+        return null;
+    }
 }

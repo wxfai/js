@@ -12,7 +12,7 @@ class Lexer {
         this.currentChar = input.charAt(pos);
     }
 
-    private void advance() {
+    private void next() {
         pos++;
         if (pos >= input.length()) {
             currentChar = '\0';  // Null character to represent EOF
@@ -23,28 +23,41 @@ class Lexer {
 
     private void skipWhitespace() {
         while (currentChar != '\0' && Character.isWhitespace(currentChar)) {
-            advance();
+            next();
         }
     }
 
-    private String consumeIdentifier() {
+    private String identifier() {
         StringBuilder result = new StringBuilder();
         while (currentChar != '\0' && (Character.isLetterOrDigit(currentChar) || currentChar == '_')) {
             result.append(currentChar);
-            advance();
+            next();
         }
-        return result.toString();
+        String id = result.toString();
+        return id;
     }
 
-    private String consumeNumber() {
+    private String parseNumber() {
         StringBuilder result = new StringBuilder();
         while (currentChar != '\0' && Character.isDigit(currentChar)) {
             result.append(currentChar);
-            advance();
+            next();
         }
         return result.toString();
     }
-
+    private String consumeString() {
+        StringBuilder result = new StringBuilder();
+        next(); // skip the opening quote
+        while (currentChar != '\0' && currentChar != '"') {
+            result.append(currentChar);
+            next();
+        }
+        if (currentChar != '"') {
+            throw new RuntimeException("Unterminated string");
+        }
+        next(); // skip the closing quote
+        return result.toString();
+    }
     public List<Token> tokenize() {
         List<Token> tokens = new ArrayList<>();
 
@@ -54,14 +67,25 @@ class Lexer {
                 continue;
             }
 
+            if (currentChar == '"') {
+                tokens.add(new Token(TokenType.STRING, consumeString()));
+                continue;
+            }
+
             if (Character.isLetter(currentChar)) {
-                String identifier = consumeIdentifier();
+                String identifier = identifier();
                 switch (identifier) {
                     case "let":
                         tokens.add(new Token(TokenType.LET, identifier));
                         break;
                     case "if":
                         tokens.add(new Token(TokenType.IF, identifier));
+                        break;
+                    case "else":
+                        tokens.add(new Token(TokenType.ELSE, identifier));
+                        break;
+                    case "for":
+                        tokens.add(new Token(TokenType.FOR, identifier));
                         break;
                     case "print":
                         tokens.add(new Token(TokenType.PRINT, identifier));
@@ -74,13 +98,20 @@ class Lexer {
             }
 
             if (Character.isDigit(currentChar)) {
-                tokens.add(new Token(TokenType.NUMBER, consumeNumber()));
+                tokens.add(new Token(TokenType.NUMBER, parseNumber()));
                 continue;
             }
 
             switch (currentChar) {
                 case '=':
-                    tokens.add(new Token(TokenType.EQUALS, "="));
+                    next();
+                    if (currentChar == '=') {
+                        tokens.add(new Token(TokenType.EQUALS, "=="));
+                        next();
+                    } else {
+                        pos--;
+                        tokens.add(new Token(TokenType.ASSIGN, "="));
+                    }
                     break;
                 case '+':
                     tokens.add(new Token(TokenType.PLUS, "+"));
@@ -115,10 +146,13 @@ class Lexer {
                 case '>':
                     tokens.add(new Token(TokenType.GREATER_THAN, ">"));
                     break;
+                case ',':
+                    tokens.add(new Token(TokenType.COMMA, ","));
+                    break;
                 default:
                     throw new RuntimeException("Unknown character: " + currentChar);
             }
-            advance();
+            next();
         }
 
         tokens.add(new Token(TokenType.EOF, ""));

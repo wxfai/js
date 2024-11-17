@@ -6,26 +6,36 @@ class Parser {
     private List<Token> tokens;
     private int pos = 0;
 
-    public Parser(List<Token> tokens) {
+    private Parser(List<Token> tokens) {
         this.tokens = tokens;
     }
 
-    private Token currentToken() {
-        return tokens.get(pos);
+    public static ASTNode parse(List<Token> tokens) {
+        Parser parser = new Parser(tokens);
+        ASTNode ast = parser.parse();
+        return ast;
     }
 
-    private void advance() {
+    private Token currentToken() {
+    	Token token = tokens.get(pos);
+        return token;
+    }
+
+    private void next() {
+    	Token token = tokens.get(pos);
+    	System.out.println("currentToken: "+ token.index + ", " + token.value);
         pos++;
     }
 
     private void expect(TokenType type) {
-        if (currentToken().type != type) {
-            throw new RuntimeException("Expected token: " + type + " but got: " + currentToken().type);
+    	Token token = currentToken();
+    	if (token.type != type) {
+            throw new RuntimeException("Expected token: " + type + " but got: " + token.type);
         }
-        advance();
+        next();
     }
 
-    public ASTNode parse() {
+    private ASTNode parse() {
     	List<ASTNode> statements = new ArrayList<>();
 
         // 逐条解析指令，直到解析完所有语句
@@ -37,41 +47,100 @@ class Parser {
     }
     
     private ASTNode parseStatement() {
-        if (currentToken().type == TokenType.LET) {
+    	Token token = currentToken();
+        if (token.type == TokenType.LET) {
             return parseVariableDeclaration();
-        } else if (currentToken().type == TokenType.PRINT) {
+        } else if (token.type == TokenType.PRINT) {
             return parsePrintStatement();
-        }
-        throw new RuntimeException("Unexpected token: " + currentToken().type);
-    }
+        } else if (token.type == TokenType.IF) {
+            return parseIfStatement();
+		} else if (token.type == TokenType.FOR) {
+            return parseForStatement();
+		} else if (token.type == TokenType.IDENTIFIER) {
+			return parseAssignmentStatement();
 
-    private ASTNode parseVariableDeclaration() {
-        advance(); // skip 'let'
+        }
+        throw new RuntimeException("Unexpected token: " + token.type);
+    }
+    private ASTNode parseAssignmentStatement() {
         String varName = currentToken().value;
         expect(TokenType.IDENTIFIER);
-        expect(TokenType.EQUALS);
+        expect(TokenType.ASSIGN);
+        ASTNode expression = parseExpression();
+        expect(TokenType.SEMICOLON);
+        return new AssignmentNode(varName, expression);
+    }
+    private ASTNode parseVariableDeclaration() {
+        next(); // skip 'let'
+        String varName = currentToken().value;
+        expect(TokenType.IDENTIFIER);
+        expect(TokenType.ASSIGN);
         ASTNode expression = parseExpression();
         expect(TokenType.SEMICOLON);
         return new VariableDeclarationNode(varName, expression);
     }
 
     private ASTNode parsePrintStatement() {
-        advance(); // skip 'print'
+        next(); // skip 'print'
         expect(TokenType.LPAREN);
-        ASTNode expression = parseExpression();
+        List<ASTNode> expressions = new ArrayList<>();
+        expressions.add(parseExpression());
+        while (currentToken().type == TokenType.COMMA) {
+            next(); // skip ','
+            expressions.add(parseExpression());
+        }
         expect(TokenType.RPAREN);
         expect(TokenType.SEMICOLON);
-        return new PrintNode(expression);
+        return new PrintNode(expressions);
     }
 
+    private ASTNode parseIfStatement() {
+        next(); // skip 'if'
+        expect(TokenType.LPAREN);
+        ASTNode condition = parseExpression();
+        expect(TokenType.RPAREN);
+        ASTNode ifBlock = parseBlock();
+
+        ASTNode elseBlock = null;
+        if (currentToken().type == TokenType.ELSE) {
+            next(); // skip 'else'
+            elseBlock = parseBlock();
+        }
+
+        return new IfNode(condition, ifBlock, elseBlock);
+    }
+	private ASTNode parseForStatement() {
+        next(); // skip 'for'
+        expect(TokenType.LPAREN);
+        ASTNode init = parseVariableDeclaration();
+//        expect(TokenType.SEMICOLON);
+        ASTNode condition = parseExpression();
+        expect(TokenType.SEMICOLON);
+        ASTNode update = parseStatement(); //parseExpression();
+        expect(TokenType.RPAREN);
+        ASTNode body = parseBlock();
+        return new ForNode(init, condition, update, body);
+    }
+    private ASTNode parseBlock() {
+        expect(TokenType.LBRACE);
+        List<ASTNode> statements = new ArrayList<>();
+        while (currentToken().type != TokenType.RBRACE) {
+            statements.add(parseStatement());
+        }
+        expect(TokenType.RBRACE);
+        return new BlockNode(statements);
+    }
+    
     private ASTNode parseExpression() {
         ASTNode left = parseTerm();
-        while ( currentToken().type == TokenType.PLUS || 
-        		currentToken().type == TokenType.MINUS|| 
-                currentToken().type == TokenType.LESS_THAN || 
-                currentToken().type == TokenType.GREATER_THAN) {
-            String operator = currentToken().value;
-            advance();
+        Token token = currentToken();
+        //while
+        if (token.type == TokenType.PLUS || 
+    		token.type == TokenType.MINUS|| 
+            token.type == TokenType.LESS_THAN || 
+            token.type == TokenType.GREATER_THAN) {
+            String operator = token.value;
+            next();
             ASTNode right = parseTerm();
             left = new BinaryOpNode(left, operator, right);
         }
@@ -82,22 +151,28 @@ class Parser {
     	Token token = currentToken();
         if (token.type == TokenType.NUMBER) {
             ASTNode numberNode = new NumberNode(token.value);
-            advance();
+            next();
             return numberNode;
+        } else if (token.type == TokenType.STRING) {
+            ASTNode stringNode = new StringNode(token.value);
+            next();
+            return stringNode;
         } else if (token.type == TokenType.LPAREN) {
-            advance();
+            next();
             ASTNode expression = parseExpression();
             expect(TokenType.RPAREN);
             return expression;
-        } else if (token.type == TokenType.IDENTIFIER) {
-            //advance();
+        } else if (token.type == TokenType.IDENTIFIER) { // i = i+1;
+            //next();
             //ASTNode node = new VariableDeclarationNode(consume(TokenType.IDENTIFIER).value, null); // 暂时未处理
+            ASTNode expression = null;
+//            expression = parseStatement();
 
-            ASTNode node = new VariableDeclarationNode(token.value, null); // 暂时未处理
-            advance();
+            ASTNode node = new VariableDeclarationNode(token.value, expression); // 暂时未处理
+            next();
             return node;
         }
-        throw new RuntimeException("Unexpected token: " + currentToken().type);
+        throw new RuntimeException("Unexpected token: " + token.type);
     }
 }
 
