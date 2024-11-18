@@ -134,15 +134,17 @@ class Parser {
     private ASTNode parseExpression() {
         ASTNode left = parseTerm();
         Token token = currentToken();
-        //while
-        if (token.type == TokenType.PLUS || 
-    		token.type == TokenType.MINUS|| 
+        while(token.type == TokenType.PLUS || 
+    		token.type == TokenType.MINUS || 
+            token.type == TokenType.MULTIPLY || 
+            token.type == TokenType.DIVIDE || 
             token.type == TokenType.LESS_THAN || 
             token.type == TokenType.GREATER_THAN) {
             String operator = token.value;
             next();
             ASTNode right = parseTerm();
             left = new BinaryOpNode(left, operator, right);
+            token = currentToken();
         }
         return left;
     }

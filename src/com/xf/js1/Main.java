@@ -8,12 +8,13 @@ public class Main {
         String code = 
         		  "let x = 5; let h=\"hello\";"
         		+ "let y = 10;"
-        		+ "let z = 0;let z=x + y;"
+        		+ "let z = 0;let z=x + y+y;"
         		+ "print(h);"
         		+ "print(\"x=\",x);"
         		+ "if(y>x){print(\"z=\",z);}";
         code += "for (let i = 0; i < 5; i = i + 1;) {print(i); }";
         code += "let i = 0; i = i + 1;print(i);i = i + 1;print(i);";
+        code = "let i = 2*3+1;print(i);";
 
         Lexer lexer = new Lexer(code);
         List<Token> tokens = lexer.tokenize();
